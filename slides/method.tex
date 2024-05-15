@@ -1,0 +1,172 @@
+\section[Method]{Method}
+\subsection{Problem Formulation}
+\begin{frame}{Problem Formulation}
+    \begin{itemize}
+        \item<1->Formulate the problem as an energy minimisation problem over a
+        densely-connected conditional random field\onslide<2->{, and
+        \item iteratively update the training targets to obtain pixelwise object
+        segmentations.}
+        \onslide<3->{
+            \begin{block}{Energy Function}
+                \begin{equation}
+                    E(\mathbf{f}) = \sum_{i} \psi_u(f_{i})
+                                    + \sum_{i < j} \psi_p(f_{i}, f_{j}),
+                \end{equation}
+                where $\mathbf{f}$ is the pixelwise segmentation, $\psi_u$ is
+                the unary potential, and $\psi_p$ is the pairwise potential.
+            \end{block}
+        }
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Problem Formulation}
+    \begin{block}{Energy Function}
+        \begin{equation*}
+            E(\mathbf{f}) = \sum_{i} \psi_u(f_{i})
+                            + \sum_{i < j} \psi_p(f_{i}, f_{j}),
+        \end{equation*}
+        where $\mathbf{f}$ is the pixelwise segmentation, $\psi_u$ is
+        the unary potential, and $\psi_p$ is the pairwise potential.
+    \end{block}
+    \onslide<2->{
+        \begin{itemize}
+            \item The unary potential is defined as the negative log-likelihood of
+                the pixel belonging to the object.
+            \item<3-> The pairwise potential penalises label differences for any two
+                pixel locations.
+        \end{itemize}
+    }
+\end{frame}
+
+\subsection{CNN}
+\begin{frame}{CNN}
+    \begin{block}{Energy Function}
+        \begin{equation*}
+            E(\mathbf{f}) = \sum_{i} \psi_u(f_{i})
+                            + \sum_{i < j} \psi_p(f_{i}, f_{j}).
+        \end{equation*}
+    \end{block}
+    \onslide<2->{
+        The unary potential term \[
+            \psi_u(f_i) = -\log p(y_i | \mathbf{x}; \boldsymbol{\Theta}),
+        \] where $p(y_i | \mathbf{x}; \boldsymbol{\Theta})$ is the probability
+        of pixel $i$ having label $f_i$.
+
+        We use a CNN to model this probability.
+    }
+\end{frame}
+
+\begin{frame}{CNN}
+    \begin{itemize}
+        \item<1->The CNN is trained to predict the probability of a pixel belonging
+            to the foreground given the input image.
+        \item<2->For each pixel in the image, we pass a $33 \times 33$ patch to
+            the CNN, centered at that pixel.
+        \item<3->The CNN is trained using the weak annotations provided in the
+            form of bounding boxes.
+        \item<4->We use the cross-entropy loss function.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Code}
+    \footnotesize
+    \begin{minted}{python}
+class CNN(nn.Module):
+    def __init__(self):
+        super(CNN, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, 5)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(32, 32, 3)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.dropout = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(32 * 6 * 6, 256)
+        self.fc2 = nn.Linear(256, 2)
+        self.init_layers()
+        return x
+    \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]{Code}
+    \footnotesize
+    \begin{minted}{python}
+class CNN(nn.Module):
+    def init_layers(self):
+        nn.init.kaiming_normal_(self.conv1.weight, nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv2.weight, nonlinearity='relu')
+        nn.init.kaiming_normal_(self.fc1.weight, nonlinearity='relu')
+        nn.init.kaiming_normal_(self.fc2.weight, nonlinearity='linear')
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.bn1(self.conv1(x))))
+        x = self.pool(F.relu(self.bn2(self.conv2(x))))
+        x = self.dropout(x)
+        x = torch.flatten(x, 1)
+        x = self.fc1(x)
+        x = self.dropout(x)
+        x = F.relu(x)
+        x = self.fc2(x)
+        return x
+    \end{minted}
+\end{frame}
+
+\begin{frame}{CNN}
+    We interrupt training after $N_{\text{epochs per crf}}$ epochs. We then inference
+    from the model and use the CRF to refine the segmentation.
+\end{frame}
+
+\section{CRF}
+\begin{frame}{CRF}
+    \begin{block}{Energy Function}
+        \begin{equation*}
+            E(\mathbf{f}) = \sum_{i} \psi_u(f_{i})
+                            + \sum_{i < j} \psi_p(f_{i}, f_{j}),
+        \end{equation*}
+    \end{block}
+    \onslide<2->{
+        The pairwise potential is defined as \[
+            \psi_p(f_i, f_j) = g(f_i, f_j) [f_i \neq f_j],
+        \]
+    }
+    \onslide<3->{
+        where
+        \begin{equation}
+            g(f_i, f_j) =
+                \omega_1\exp\left(-\frac{||p_i - p_j||^2}{2\theta_{\alpha}^2}
+                                  -\frac{||I_i - I_j||^2}{2\theta_{\beta}^2}\right)
+                + \omega_2\exp\left(-\frac{||p_i - p_j||^2}{2\theta_{\gamma}^2}\right),\label{eq:pairwise}
+        \end{equation}
+        where $p_i$ and $I_i$ are the spatial and intensity features of pixel $i$.
+    }
+\end{frame}
+
+\begin{frame}{CRF}
+    \begin{equation}
+        g(f_i, f_j) =
+            \omega_1\exp\left(-\frac{||p_i - p_j||^2}{2\theta_{\alpha}^2}
+                              -\frac{||I_i - I_j||^2}{2\theta_{\beta}^2}\right)
+            + \omega_2\exp\left(-\frac{||p_i - p_j||^2}{2\theta_{\gamma}^2}\right).
+    \end{equation}
+    \onslide<2->{
+        \begin{itemize}
+            \item The first term models the appearance.
+            \item<3-> The second term models the smoothness.
+        \end{itemize}
+    }
+\end{frame}
+
+\begin{frame}{CRF}
+    \begin{itemize}
+        \item<1-> The CRF minimizes the energy function using the mean field approximation.
+        \item<2-> Instead of computing $p(\mathbf{x})$ for a labeling
+            $\mathbf{x}$ of the image, the mean field approximation computes a
+            distribution $q(\mathbf{x})$ that minimizes the KL-divergence
+            $\mathbf{D}(q||p)$ among all distributions $q$ that can be expressed
+            as a product of independent marginals: \[
+                q(\mathbf{x}) = \prod_{i} q_i(x_i).
+            \] 
+        \item<3-> We use the SimpleCRF library based on the paper by
+            Kr\"{a}henb\"{u}hl and Koltun \cite{crf-inference} to do the
+            optimisation.
+    \end{itemize}
+\end{frame}

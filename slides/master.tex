@@ -1,0 +1,51 @@
+%! TeX program = xelatex
+
+% Copyright (c) 2024 Aditya Singh.
+%
+% Dependencies:
+%  - Fonts
+%    * JetBrains Mono (https://download.jetbrains.com/fonts/JetBrainsMono-2.304.zip)
+%    * Inter (https://fonts.google.com/specimen/Inter)
+%  - Pygments (https://pygments.org/)
+%  - ... and all the packages in preamble.tex.
+% Please use XeLaTeX to compile this document.
+% -shell-escape flag is required to use minted package.
+
+\documentclass[aspectratio=169, handout]{beamer}
+% \documentclass[aspectratio=169]{beamer}
+\usetheme{metropolis}
+\input{preamble.tex}
+\addbibresource{refs.bib}
+
+\title{DeepCut}
+\subtitle{Based on the paper by Martin Rajchl et al\texorpdfstring{\cite{deepcut}}{}}
+\date{}
+\author{\texorpdfstring{
+    Aditya Singh {\footnotesize (22B0056)},
+    Vishal Bysani {\footnotesize (22B1061)}
+    \newline \footnotesize
+    \href{mailto:adityas@cse.iitb.ac.in}{\texttt{adityas@cse.iitb.ac.in}},
+    \href{mailto:vishalbysani@cse.iitb.ac.in}{\texttt{vishalbysani@cse.iitb.ac.in}}}
+    {Aditya Singh, Vishal Bysani}}
+\institute{CS 736 (Medical Image Computing) Course Project}
+
+\begin{document}
+
+    \maketitle
+
+    \begin{frame}{Contents}
+        \setbeamertemplate{section in toc}[sections numbered]
+        \tableofcontents
+    \end{frame}
+
+    \input{introduction.tex}
+    \input{method.tex}
+    \input{dataset.tex}
+    \input{results.tex}
+
+    \begin{frame}[allowframebreaks]{References}
+        % print bibliography without header
+        \printbibliography[heading=none]
+    \end{frame}
+
+\end{document}

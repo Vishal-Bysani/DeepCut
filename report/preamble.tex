@@ -1,0 +1,50 @@
+\usepackage{fontspec}
+     \setsansfont{Inter}
+ 	 \setmonofont{JetBrains Mono}[Scale = MatchLowercase]
+\usepackage{amsmath, amsfonts, mathtools, amsthm, amssymb}
+\usepackage{xcolor}
+    \definecolor{link-color}{HTML}{3584E3}
+    \definecolor{bg-color}{HTML}{F2F2F2}
+\usepackage{url}
+\usepackage{hyperref}
+    \hypersetup{
+        pdfauthor={Aditya Singh, Vishal Bysani},
+        pdftitle={DeepCut},
+        pdfsubject={CS 736 Course Project},
+        pdfproducer={xelatex},
+        hidelinks,
+        colorlinks,
+        linkcolor=,
+        citecolor=link-color,
+        urlcolor=link-color,
+        anchorcolor=link-color
+    }
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{parskip}
+\usepackage{subcaption}
+\usepackage{mathrsfs}
+\usepackage{cancel}
+\usepackage{caption}
+\usepackage{upgreek}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{pgf}
+\usepackage{import}
+\usepackage[framemethod=TikZ]{mdframed}
+\usepackage{minted}
+    \usemintedstyle{colorful}
+\usepackage{doi}
+\usepackage[
+    backend=biber,
+    style=alphabetic,
+    sorting=ydnt,
+    maxbibnames=20
+]{biblatex}
+
+% Matplotlib:
+\def\mathdefault#1{#1}
+\everymath=\expandafter{\the\everymath\displaystyle}
+\makeatletter
+    \@ifpackageloaded{underscore}{}{\usepackage[strings]{underscore}}
+\makeatother

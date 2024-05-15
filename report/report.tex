@@ -1,0 +1,203 @@
+%! TeX program = xelatex
+
+\documentclass[a4paper]{article}
+\input{preamble.tex}
+\addbibresource{refs.bib}
+\title{\huge \bfseries Implementing DeepCut}
+\author{
+    \textbf{Aditya Singh} \\
+    {\normalsize 22B0056} \\
+    {\normalsize \href{mailto:adityas@cse.iitb.ac.in}{\texttt{adityas@cse.iitb.ac.in}}} \and
+    \textbf{Vishal Bysani} \\
+    {\normalsize 22B1061} \\
+    {\normalsize \href{mailto:vishalbysani@vishal.iitb.ac.in}{\texttt{vishalbysani@cse.iitb.ac.in}}}}
+\date{}
+
+\begin{document}
+\maketitle
+
+
+\section{Introduction}
+Object segmentation is a fundamental problem in computer vision, with
+applications in image editing, medical imaging, and autonomous driving.
+Traditional methods for object segmentation require pixel-level annotations,
+which are expensive and time-consuming to obtain.
+
+We have implemented DeepCut \cite{deepcut}, a method to obtain pixelwise object
+segmentations given an image dataset labelled with weak annotations, in our case
+bounding boxes.
+
+DeepCut falls into a class of iterative optimisation methods. It extends the
+approach of the well-known GrabCut \cite{grabcut} method to include machine
+learning by training a neural network classifier from bounding box annotations. 
+
+
+\section{Method}
+Given an image dataset $\mathcal{D} = \{(I_1, B_1), \ldots, (I_N, B_N)\}$, where
+$I_i$ is the $i$-th image and $B_i$ is the bounding box annotation for the
+object of interest, we seek to obtain pixelwise object segmentations for each
+image. We formulate the problem as an energy minimization task, where we seek to
+minimize the energy function
+\begin{equation}
+    E(f) = \sum_{i} \psi_u(f_i) + \sum_{i < j} \psi_p(f_i, f_j),\label{eq:energy}
+\end{equation}
+where $f_i$ is the label of the $i$-th pixel, $\psi_u(f_i)$ is the unary
+potential, and $\psi_p(f_i, f_j)$ is the pairwise potential.
+
+The unary potential $\psi_u(f_i)$ is computed from a convolutional neural
+network that produces a distribution $y_i$ over labels given an input image (or
+patch) $\mathbf{x}$ and is defined as the negative log-likelihood of this
+probability: \[
+    \psi_u(f_i) = -\log p(y_i | \mathbf{x}; \boldsymbol{\Theta}),
+\] where $\boldsymbol{\Theta}$ are the parameters of the CNN. The pairwise
+potential is defined as \[
+    \psi_p(f_i, f_j) = g(f_i, f_j) [f_i \neq f_j],
+\] where
+\begin{equation}
+        g(f_i, f_j) =
+            \omega_1\exp\left(-\frac{||p_i - p_j||^2}{2\theta_{\alpha}^2}
+                              -\frac{||I_i - I_j||^2}{2\theta_{\beta}^2}\right)
+            + \omega_2\exp\left(-\frac{||p_i - p_j||^2}{2\theta_{\gamma}^2}\right).\label{eq:pairwise}
+\end{equation}
+The first term in equation \ref{eq:pairwise} models the appearance and the
+second term in models the smoothness.
+
+\subsection{Convolutional Neural Network}
+For each pixel in an image, we pass a $33 \times 33$ patch centered at the pixel
+to a CNN. The CNN consists of two sets of convolutional layers, followed by
+batch normalization layers, rectified linear units (ReLU), and max-pooling
+layers. The architecture is shown in figure % TODO.
+
+\subsection{Convolutional Neural Network Model}
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.4\textwidth]{figures/Screenshot from 2024-04-27 19-52-38.png}
+    \caption{CNN architecture}
+\end{figure}
+
+We modified the architecture slightly by adding batch normalizaton layers,
+which were not present in the original paper. We also used Adam optimizer with a
+learning rate of 0.003 instead of Adagrad for faster learning. We use Kaiming
+normal \cite{kaiming} initialization for the weights of the CNN.
+
+The loss function used to train the CNN is the cross-entropy loss between the
+true and predicted segmentations. Initially, every pixel in the bounding box is
+considered foreground, and every pixel in the halo is considered background.
+(The model doesn't require precise annotation of the image, only rectangular
+bounding boxes.)
+
+To prevent overfitting and to speed up
+training, dropout regularization \cite{dropout} is applied to the fully
+connected layers before the output layer, as well as the second pooling layer.
+
+\subsection{Conditional Random Field Regularisation}
+After every $N_{\text{epochs per crf}} = 15$ epochs of training the CNN, we
+update the pixel classes in the bounding box via inference and subsequent CRF
+regularisation. (The paper mentioned 50 epochs, but because of batchnorm layers,
+Adam optimizer and a smaller dataset, we found that 15 epochs were optimal.)
+
+We made use of the python library SimpleCRF, based on \cite{crf-inference}.  We
+used the same values for the CRF parameters as in the paper \cite{deepcut} (for
+brain images) as shown in table \ref{tab:crf-params}.
+
+\begin{table}
+    \centering
+    \begin{tabular}{l l}
+        \toprule
+        $\omega_1, \omega_2$ & 5.0 \\
+        $\theta_{\alpha}$ & 10.0 \\
+        $\theta_{\beta}$ & 20.0 \\
+        $\theta_{\gamma}$ & 0.5 \\
+        $N_{\text{iterations}}$ & 5 \\
+        \bottomrule
+    \end{tabular}
+    \caption{CRF parameters}
+    \label{tab:crf-params}
+\end{table}
+
+\section{Dataset}
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.3\textwidth]{figures/annotating.png}
+    \caption{Bounding box (green) and halo (red) around a fetal brain.}
+\end{figure}
+
+We trained our model on fetal magnetic resonance images from \cite{dataset}.
+We applied bias field correction to the images before training. The images were
+annotated with bounding boxes around the fetal head/lungs. We wrote a program to
+draw bounding boxes around the fetal head and the halo around it. The halo was
+drawn to include the entire fetal head and some surrounding area. The bounding
+boxes were used as weak annotations for training the CNN.
+
+Our training set underwent data augmentation for better generalisation of the
+learned features and to prevent over-fitting to the training data as mentioned
+in the paper. For this purpose, we added a Gaussian-distributed intensity offset
+to each patch with the standard deviation 0.1 and randomly flipped the patch
+across the spatial dimensions to increase the variation in the training data.
+
+\section{Evaluation}
+The paper mentioned to evaluate the obtained segmentation against expert manual
+segmentations. However, since we were unable to obtain them, we manually
+annotated a few images and compared the obtained segmentations with them. The
+metric used to compare segmentations is the Dice Similarity Coefficient (DSC),
+which is the ratio of the intersection of the predicted and true foreground
+regions to the average of their areas: \[
+    \text{DSC} = \frac{2 |A \cap B|}{|A| + |B|},
+\] where $A$ is the foreground region of our segmentation, and $B$ is the
+foreground region of the expert segmentation.
+
+The DSC is a measure of the overlap between the predicted and true
+segmentations, with a value of 1 indicating perfect overlap and 0 indicating no
+overlap.
+
+\begin{table}
+    \centering
+    \begin{tabular}{l l}
+        \toprule
+        Image & DSC \\
+        \midrule
+        Image 1 & 0.87 \\
+        Image 2 & 0.92 \\
+        Image 3 & 0.87 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Dice Similarity Coefficient}
+    \label{tab:dsc}
+\end{table}
+
+\begin{figure}[h!]
+    \centering
+    \resizebox{0.7\textwidth}{!}{\input{result_1.pgf}}
+    \caption{Image 1}
+    \label{fig:results-1}
+\end{figure}
+
+\section{Results}
+
+\begin{figure}[h!]
+    \centering
+    \resizebox{0.7\textwidth}{!}{\input{result_3.pgf}}
+    \caption{Image 2}
+    \label{fig:results-2}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \resizebox{0.7\textwidth}{!}{\input{result_6.pgf}}
+    \caption{Image 3}
+    \label{fig:results-3}
+\end{figure}
+
+We evaluated our model on 3 images. The DSC values obtained are shown in table
+\ref{tab:dsc}. Figures \ref{fig:results-1}, \ref{fig:results-2}, and
+\ref{fig:results-3} show the original images and the obtained segmentations. The
+segmentations are shown in green. The foreground labels are white.
+
+We trained our model on a single NVIDIA RTX 3060 laptop GPU with 6 GiB of memory
+and an Intel i7-12700H CPU with 16 GiB of system memory. Hence, we could only
+train on a small batch of 3 images.
+
+\section{References}
+\printbibliography[heading=none]
+
+\end{document}
